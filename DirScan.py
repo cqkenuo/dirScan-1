@@ -3,6 +3,7 @@ import os
 import requests
 import threading
 import random
+import re
 from Log import set_log
 
 
@@ -12,12 +13,14 @@ class DirScan:
     scan_host_name = ''
     scan_code = [200]
     queues = object
-    limit = 3
+    limit = 8
+    ip_list = {}
 
     def __init__(self, host_name='http://www.baidu.com', file_path='./御剑字典'):
         self.scan_host_name = host_name
         self.queues = queue.Queue()
         self.get_all_file(file_path=file_path)
+        self.get_ip()
 
     # 获取目录下面所有的文件名称
     def get_all_file(self, file_path):
@@ -51,7 +54,6 @@ class DirScan:
         while self.queues.qsize() > 0:
             while threading.active_count() < self.limit:
                 key = self.queues.get()
-                print(key)
                 threads = threading.Thread(target=self.scan_dir, args=(key,))
                 threads.start()
 
@@ -62,8 +64,14 @@ class DirScan:
         else:
             host_addr = self.scan_host_name + '/' + key
 
+        keys = random.choice(list(self.ip_list))
+        port_str = keys + ':' + self.ip_list[keys]
+        proxies = {
+            'http': port_str
+        }
+
         try:
-            r = requests.get(url=host_addr, headers=self.get_user_agent())
+            r = requests.get(url=host_addr, headers=self.get_user_agent(), proxies=proxies)
             if r.status_code in self.scan_code:
                 # 写日志
                 msg = {host_addr: r.status_code}
@@ -72,8 +80,11 @@ class DirScan:
                 set_log(msg, file_name)
                 print(msg)
                 return msg
-        except requests.exceptions.ConnectionError as e:
-            print(e)
+        except Exception as e:
+            print(host_addr, '打开失败 !')
+        #     print(host_addr, "无法访问")
+        # except requests.exceptions.HTTPError as e:
+        #     print("代理ip无法链接")
 
     @staticmethod
     def get_user_agent():
@@ -99,6 +110,33 @@ class DirScan:
         ]
         return random.choice(user_agent_list)
 
+    # 代理ip
+    def get_ip(self):
+    # def get_ip():
+        ip_arr = {}
+        urls ="https://www.kuaidaili.com/free/inha/1/"
+        str_html = requests.get(urls)
+        str_text = str_html.text
+        regex = re.compile('<td data-title="IP">(.*)</td>')
+        ips = regex.findall(str_text)
+        port_regex = re.compile('<td data-title="PORT">(.*)</td>')
+        ports = port_regex.findall(str_text)
+
+        for key in range(len(ips)):
+            ip_arr[ips[key]] = ports[key]
+
+        # keys = random.choice(list(ip_arr))
+        # port_str = "http://" + keys + ':' + ip_arr[keys]
+        # proxies = {
+        #     'http': port_str
+        # }
+        # print(proxies)
+        # res = requests.get('http://www.baidu.com', proxies=proxies)
+        # print(res)
+
+        self.ip_list = ip_arr
+        return self.ip_list
+
 
 if __name__ == "__main__":
     import sys
@@ -121,8 +159,5 @@ if __name__ == "__main__":
 
     dirScan = DirScan(file_path=path, host_name=url)
     dirScan.scan_dir_helps()
-
-
-
-
+    # DirScan.get_ip()
 
